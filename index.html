@@ -230,13 +230,21 @@ table.main td{padding:6px 9px;vertical-align:middle}
   <!-- Linha 1: Mês + Situação -->
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%">
     <div class="f-label">📅 Mês</div>
-    <div class="mes-checks" id="mes-checks">
-      <span class="mes-chk on" data-mes="08/2026" onclick="toggleMes(this)">✓ Ago/26</span>
-      <span class="mes-chk on" data-mes="09/2026" onclick="toggleMes(this)">✓ Set/26</span>
-      <span class="mes-chk on" data-mes="10/2026" onclick="toggleMes(this)">✓ Out/26</span>
-      <span class="mes-chk on" data-mes="07/2026" onclick="toggleMes(this)">✓ Jul/26</span>
-      <span class="mes-chk mais-antigo" data-mes="ANTIGOS" onclick="toggleMes(this)">🔒 Mais antigos</span>
-      <span class="aviso-antigo" id="aviso-antigos">pedidos antigos ocultos por padrão</span>
+    <div style="position:relative;display:inline-block">
+      <button id="mes-btn" onclick="toggleMesDropdown()" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;border:1.5px solid #B0BEC5;background:#ECEFF1;color:#37474F;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">
+        <span id="mes-btn-label">Meses</span> <span style="font-size:9px">▼</span>
+      </button>
+      <div id="mes-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#fff;border:1.5px solid #B0BEC5;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.13);padding:8px;min-width:180px;max-height:320px;overflow-y:auto">
+        <div style="display:flex;gap:6px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #ECEFF1">
+          <button onclick="selTodosMeses(true)" style="flex:1;padding:3px 0;border-radius:5px;border:none;background:#1565C0;color:#fff;font-size:10px;font-weight:700;cursor:pointer">Todos</button>
+          <button onclick="selTodosMeses(false)" style="flex:1;padding:3px 0;border-radius:5px;border:none;background:#ECEFF1;color:#546E7A;font-size:10px;font-weight:700;cursor:pointer">Nenhum</button>
+        </div>
+        <div id="mes-checks"></div>
+      </div>
+    </div>
+    <span id="aviso-antigos" style="display:none"></span>
+    <span id="wrap-antigos" style="display:none"></span>
+    <div id="mes-dummy">
     </div>
     <div class="f-sep"></div>
     <div class="f-label">Situação <span style="font-size:8px;color:var(--ci);font-weight:400">(multi)</span></div>
@@ -449,9 +457,7 @@ let tabEst    = 'cart';
 let sortCol   = 'idade';
 let sortDir   = -1;
 let sitAtiva  = new Set(); // Set vazio = todas
-// Meses ativos (padrão: últimos 4 meses de 2026)
-let mesesAtivos = new Set(['07/2026','08/2026','09/2026','10/2026']);
-let mostrarAntigos = false; // pedidos fora dos últimos 4 meses
+let mesesAtivos = new Set(); // preenchido por buildMesChecks()
 
 // ── INIT ──
 function inicializar(){
@@ -502,6 +508,8 @@ function reinicializar(){
   renderEstoque();
 }
 
+const NOMES_MES={"01":"Jan","02":"Fev","03":"Mar","04":"Abr","05":"Mai","06":"Jun","07":"Jul","08":"Ago","09":"Set","10":"Out","11":"Nov","12":"Dez"};
+
 function buildMesChecks(){
   const todos=[...new Set(RESUMO.map(r=>getMesAnoRow(r)))].filter(Boolean);
   todos.sort((a,b)=>{
@@ -509,100 +517,94 @@ function buildMesChecks(){
     const [mb,yb]=b.split("/").map(Number);
     return yb!==ya?yb-ya:mb-ma;
   });
-  const MAX_VISIVEIS=6;
+  // Por padrão: selecionar os 4 mais recentes
   const recentes=todos.slice(0,4);
   mesesAtivos=new Set(recentes);
-  mostrarAntigos=false;
-  const NOMES={"01":"Jan","02":"Fev","03":"Mar","04":"Abr","05":"Mai","06":"Jun","07":"Jul","08":"Ago","09":"Set","10":"Out","11":"Nov","12":"Dez"};
-  const mc=document.getElementById("mes-checks");
-  mc.innerHTML="";
 
-  // Mostrar só os primeiros MAX_VISIVEIS meses
-  const visiveis=todos.slice(0,MAX_VISIVEIS);
-  const antigos=todos.slice(MAX_VISIVEIS);
-
-  visiveis.forEach(m=>{
+  // Agrupar por ano
+  const porAno={};
+  todos.forEach(m=>{
     const [mm,yy]=m.split("/");
-    const ativo=mesesAtivos.has(m);
-    const sp=document.createElement("span");
-    sp.className="mes-chk"+(ativo?" on":"");
-    sp.dataset.mes=m;
-    sp.onclick=function(){toggleMes(this);};
-    sp.textContent=(ativo?"✓ ":"")+NOMES[mm]+"/"+yy.slice(2);
-    mc.appendChild(sp);
+    if(!porAno[yy]) porAno[yy]=[];
+    porAno[yy].push(m);
   });
 
-  if(antigos.length){
-    // Botão expandir meses antigos
-    const spAnt=document.createElement("span");
-    spAnt.className="mes-chk mais-antigo";
-    spAnt.dataset.mes="ANTIGOS";
-    spAnt.id="btn-mais-antigos";
-    spAnt.onclick=function(){toggleMes(this);};
-    spAnt.textContent="🔒 Mais antigos ("+antigos.length+"m)";
-    mc.appendChild(spAnt);
-
-    // Container oculto com meses antigos
-    const wrap=document.createElement("span");
-    wrap.id="wrap-antigos";
-    wrap.style.cssText="display:none;";
-    antigos.forEach(m=>{
-      const [mm,yy]=m.split("/");
-      const sp=document.createElement("span");
-      sp.className="mes-chk";
-      sp.dataset.mes=m;
-      sp.onclick=function(){toggleMes(this);};
-      sp.textContent=NOMES[mm]+"/"+yy.slice(2);
-      wrap.appendChild(sp);
+  const mc=document.getElementById("mes-checks");
+  mc.innerHTML="";
+  Object.keys(porAno).sort((a,b)=>b-a).forEach(yy=>{
+    const anoDiv=document.createElement("div");
+    anoDiv.style.cssText="margin-bottom:6px";
+    const anoLabel=document.createElement("div");
+    anoLabel.style.cssText="font-size:10px;font-weight:800;color:#90A4AE;letter-spacing:.5px;margin-bottom:3px;text-transform:uppercase";
+    anoLabel.textContent=yy;
+    anoDiv.appendChild(anoLabel);
+    const mesesDiv=document.createElement("div");
+    mesesDiv.style.cssText="display:flex;flex-wrap:wrap;gap:4px";
+    porAno[yy].forEach(m=>{
+      const [mm]=m.split("/");
+      const ativo=mesesAtivos.has(m);
+      const sp=document.createElement("label");
+      sp.style.cssText="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid "+(ativo?"#1565C0":"#CFD8DC")+";background:"+(ativo?"#E3F2FD":"#F5F7FA")+";color:"+(ativo?"#0D47A1":"#546E7A");
+      const cb=document.createElement("input");
+      cb.type="checkbox"; cb.checked=ativo; cb.value=m;
+      cb.style.cssText="accent-color:#1565C0;width:11px;height:11px;cursor:pointer";
+      cb.onchange=function(){toggleMesCheck(m,this.checked,sp);};
+      sp.appendChild(cb);
+      sp.appendChild(document.createTextNode(NOMES_MES[mm]));
+      mesesDiv.appendChild(sp);
     });
-    mc.appendChild(wrap);
-  }
-
-  const aviso=document.getElementById("aviso-antigos");
-  if(aviso)aviso.style.display="none";
+    anoDiv.appendChild(mesesDiv);
+    mc.appendChild(anoDiv);
+  });
+  atualizarBotaoMes();
 }
+
+function toggleMesCheck(mes,checked,label){
+  if(checked){ mesesAtivos.add(mes); label.style.borderColor="#1565C0"; label.style.background="#E3F2FD"; label.style.color="#0D47A1"; }
+  else { mesesAtivos.delete(mes); label.style.borderColor="#CFD8DC"; label.style.background="#F5F7FA"; label.style.color="#546E7A"; }
+  atualizarBotaoMes();
+  render();
+}
+
+function selTodosMeses(sel){
+  mesesAtivos.clear();
+  document.querySelectorAll("#mes-checks input[type=checkbox]").forEach(cb=>{
+    cb.checked=sel;
+    const label=cb.parentElement;
+    if(sel){ mesesAtivos.add(cb.value); label.style.borderColor="#1565C0"; label.style.background="#E3F2FD"; label.style.color="#0D47A1"; }
+    else { label.style.borderColor="#CFD8DC"; label.style.background="#F5F7FA"; label.style.color="#546E7A"; }
+  });
+  atualizarBotaoMes();
+  render();
+}
+
+function atualizarBotaoMes(){
+  const n=mesesAtivos.size;
+  const total=document.querySelectorAll("#mes-checks input[type=checkbox]").length;
+  const lbl=document.getElementById("mes-btn-label");
+  if(!lbl) return;
+  if(n===0) lbl.textContent="Nenhum mês";
+  else if(n===total) lbl.textContent="Todos os meses ("+total+")";
+  else lbl.textContent=n+" mês"+(n>1?"es":"")+" selecionado"+(n>1?"s":"");
+}
+
+let _mesDropOpen=false;
+function toggleMesDropdown(){
+  const dd=document.getElementById("mes-dropdown");
+  _mesDropOpen=!_mesDropOpen;
+  dd.style.display=_mesDropOpen?"block":"none";
+}
+document.addEventListener("click",function(e){
+  if(_mesDropOpen&&!e.target.closest("#mes-dropdown")&&!e.target.closest("#mes-btn")){
+    _mesDropOpen=false;
+    const dd=document.getElementById("mes-dropdown");
+    if(dd) dd.style.display="none";
+  }
+});
 
 inicializar();
 
 // ── FILTROS ──
-function toggleMes(el){
-  const mes = el.dataset.mes;
-  if(mes==='ANTIGOS'){
-    mostrarAntigos = !mostrarAntigos;
-    el.classList.toggle('on', mostrarAntigos);
-    const n=el.textContent.replace('✓ ','').replace('🔒 ','');
-    el.textContent = (mostrarAntigos?'✓ ':'🔒 ')+n;
-    const wrap=document.getElementById('wrap-antigos');
-    if(wrap){
-      wrap.style.display=mostrarAntigos?'inline-flex':'none';
-      // Marcar/desmarcar todos os meses antigos
-      wrap.querySelectorAll('.mes-chk').forEach(sp=>{
-        if(mostrarAntigos){
-          mesesAtivos.add(sp.dataset.mes);
-          sp.classList.add('on');
-          if(!sp.textContent.startsWith('✓')) sp.textContent='✓ '+sp.textContent;
-        } else {
-          mesesAtivos.delete(sp.dataset.mes);
-          sp.classList.remove('on');
-          sp.textContent=sp.textContent.replace('✓ ','');
-        }
-      });
-    }
-    const aviso=document.getElementById('aviso-antigos');
-    if(aviso) aviso.style.display=mostrarAntigos?'none':'';
-  } else {
-    if(mesesAtivos.has(mes)){
-      mesesAtivos.delete(mes);
-      el.classList.remove('on');
-      el.textContent = el.textContent.replace('✓ ','');
-    } else {
-      mesesAtivos.add(mes);
-      el.classList.add('on');
-      if(!el.textContent.startsWith('✓')) el.textContent = '✓ ' + el.textContent;
-    }
-  }
-  render();
-}
 
 function getMesAnoRow(r){
   // r.dt_dig formato DD/MM/YYYY
@@ -623,13 +625,10 @@ function getFilt(){
 
 function filtrar(data){
   const f = getFilt();
-  const mesesRecentes = new Set(['07/2026','08/2026','09/2026','10/2026']);
   return data.filter(r=>{
     // ── Filtro de mês ──
     const mesAno = getMesAnoRow(r);
-    const ehRecente = mesesAtivos.has(mesAno);
-    const ehAntigo  = !mesesRecentes.has(mesAno);
-    if(!ehRecente && !(mostrarAntigos && ehAntigo)) return false;
+    if(!mesesAtivos.has(mesAno)) return false;
 
     // ── KPI ──
     if(kpiAtivo==='ap' && r.status_grupo!=='Aprovado') return false;
@@ -781,10 +780,9 @@ function atualizarKpis(){
 // Filtra sem o filtro de kpi (para KPIs globais não mudarem ao clicar nos cards)
 function filtrarBase(){
   const f=getFilt();
-  const mesesRecentes = new Set(['07/2026','08/2026','09/2026','10/2026']);
   return RESUMO.filter(r=>{
     const mesAno = getMesAnoRow(r);
-    if(!mesesAtivos.has(mesAno) && !(mostrarAntigos && !mesesRecentes.has(mesAno))) return false;
+    if(!mesesAtivos.has(mesAno)) return false;
     if(sitAtiva.size>0 && !sitAtiva.has(r.situacao)) return false;
     if(f.tipo && r.tipo!==f.tipo) return false;
     if(f.entrega && r.tipo_entrega!==f.entrega) return false;
@@ -797,11 +795,8 @@ function filtrarBase(){
 
 function filtrarSemKpi(r, grupo){
   const f=getFilt();
-  const mesesRecentes = new Set(['07/2026','08/2026','09/2026','10/2026']);
   const mesAno = getMesAnoRow(r);
-  const ehRecente = mesesAtivos.has(mesAno);
-  const ehAntigo  = !mesesRecentes.has(mesAno);
-  if(!ehRecente && !(mostrarAntigos && ehAntigo)) return false;
+  if(!mesesAtivos.has(mesAno)) return false;
   if(sitAtiva.size>0 && !sitAtiva.has(r.situacao)) return false;
   if(f.tipo && r.tipo!==f.tipo) return false;
   if(f.entrega && r.tipo_entrega!==f.entrega) return false;
@@ -1030,22 +1025,7 @@ function renderProd(){
 function limpar(){
   kpiAtivo='total';
   sitAtiva = new Set();
-  // Resetar meses para padrão (últimos 4)
-  mesesAtivos = new Set(['07/2026','08/2026','09/2026','10/2026']);
-  mostrarAntigos = false;
-  document.querySelectorAll('.mes-chk').forEach(el=>{
-    const mes = el.dataset.mes;
-    if(mes==='ANTIGOS'){
-      el.classList.remove('on');
-      el.textContent='🔒 Mais antigos';
-    } else {
-      const ativo = mesesAtivos.has(mes);
-      el.classList.toggle('on', ativo);
-      const labels={'07/2026':'Jul/26','08/2026':'Ago/26','09/2026':'Set/26','10/2026':'Out/26'};
-      el.textContent = ativo ? '✓ '+labels[mes] : labels[mes];
-    }
-  });
-  document.getElementById('aviso-antigos').style.display='';
+  buildMesChecks(); // reseta meses para padrão (4 mais recentes) sem hardcode
   ['sel-tipo','sel-entrega','sel-filial','sel-produto'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('busca').value='';
   document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));
