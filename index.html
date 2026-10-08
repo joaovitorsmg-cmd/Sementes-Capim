@@ -1091,33 +1091,30 @@ function mapRow(row, mapa){
 }
 
 const MAPA_RESUMO={
-  cod:       ['cod.','codigo','cod','código produto','cód. produto','item'],
-  produto:   ['produto','descricao','descrição','description'],
-  quant:     ['quantidade','quant','qtd','sc','sacas'],
-  peso:      ['peso','kg'],
-  pedido:    ['pedido','num. pedido','nº pedido','número pedido'],
-  tipo:      ['tipo','type'],
-  situacao:  ['situacao','situação','status situacao','situação atual'],
-  dt_dig:    ['dt. digitacao','data digitacao','dt.digitação','dt digitacao','data dig','dt_dig','digitação','dt. dig'],
-  vendedor:  ['vendedor','vend'],
-  loja_fat:  ['loja fat','loja faturamento','filial fat','loja_fat'],
-  cod_cli:   ['cod. cliente','cód. cliente','cod cliente','codigo cliente','cod_cli'],
-  cliente:   ['cliente','nome cliente','razao social','razão social'],
-  tipo_entrega:['tipo entrega','tipo_entrega','modalidade entrega','entrega'],
-  loja_ped:  ['loja ped','loja pedido','filial ped','loja_ped'],
-  idade:     ['idade','dias','age'],
-  peso:      ['peso'],
+  cod:          ['Código','codigo','cod','código produto'],
+  produto:      ['Produto','produto','descricao','descrição'],
+  quant:        ['Quant.','Quantidade','quant','qtd','sc'],
+  peso:         ['Peso','peso','kg'],
+  pedido:       ['Pedido','pedido','num. pedido'],
+  tipo:         ['Tipo','tipo'],
+  situacao:     ['Situação','Situacao','situacao','situação'],
+  dt_dig:       ['Dt. Digitação','Dt. Digitacao','data digitacao','dt_dig'],
+  vendedor:     ['Vendedor','vendedor'],
+  loja_fat:     ['Loja Fat.','Loja Fat','loja faturamento','loja_fat'],
+  cod_cli:      ['Cód. Cliente','Cod. Cliente','cod cliente','cod_cli'],
+  cliente:      ['Cliente','cliente'],
+  tipo_entrega: ['Tipo Entrega','tipo entrega','tipo_entrega'],
+  loja_ped:     ['Loja Ped.','Loja Ped','loja pedido','loja_ped'],
+  idade:        ['Idade','idade','dias'],
 };
 
 const MAPA_LOTE={
-  filial:     ['filial','loja','branch'],
-  cod:        ['cod','código','codigo','cod.','item'],
-  descricao:  ['descricao','descrição','produto','description'],
-  estoque:    ['estoque','saldo estoque','qty estoque','saldo atual'],
-  ent_futura: ['ent. futura','entrada futura','ent futura','entradas futuras'],
-  saldo:      ['saldo','saldo final'],
-  transf:     ['transf','transferencia','transferência'],
-  saldo_transf:['saldo c/ transf','saldo transf','saldo_transf','saldo com transferencia'],
+  filial:      ['Filial','filial'],
+  cod:         ['Código','Codigo','codigo','cod'],
+  descricao:   ['Descrição','Descricao','descricao','produto'],
+  estoque:     ['Qtde. Estoque','Qtde.Estoque','estoque','qtde estoque'],
+  transf:      ['Qtde. Transf.','Qtde.Transf.','transf','qtde transf'],
+  saldo_transf:['(Saldo + Transf.)','saldo + transf','saldo transf','saldo_transf'],
 };
 
 function normSituacao(raw){
@@ -1131,14 +1128,17 @@ function normSituacao(raw){
   if(s.includes('com problema')||s.includes('c/ problema')||s.includes('com problemas')) return 'Dig. Com Problemas';
   if(s.includes('sem estoque')&&(s.startsWith('dig')||s.includes('digitado'))) return 'Dig. Sem Estoque';
   if(s.includes('nao analisado')||s.includes('não analisado')) return 'Digitado';
+  if(s.startsWith('venc')||s.includes('vencido')) return 'Vencido';
   if(s.startsWith('dig')||s.includes('digitado')) return 'Digitado';
-  return raw; // manter original se não mapeado
+  return raw;
 }
 
 function derivarStatusGrupo(situacao){
   if(!situacao) return 'Digitado';
   const s=normSituacao(situacao);
-  return s.startsWith('Ap.') ? 'Aprovado' : 'Digitado';
+  if(s.startsWith('Ap.')) return 'Aprovado';
+  if(s==='Vencido') return 'Vencido';
+  return 'Digitado';
 }
 
 function calcIdade(dtDig){
@@ -1207,11 +1207,14 @@ async function processarPlanilhas(){
     if(!rawL.length){st.textContent='❌ Planilha Lote vazia ou sem linhas.';return;}
 
     // Mapear RESUMO
+    // Parser PT-BR: "20.333,00" → 20333, "9,000" → 9.0
+    const parseBR=v=>parseFloat(String(v||0).replace(/\./g,'').replace(',','.'))||0;
+
     const novoResumo=rawR.map(row=>{
       const r=mapRow(row,MAPA_RESUMO);
       r.dt_dig=fmtDataExcel(r.dt_dig);
-      r.quant=parseFloat(r.quant)||0;
-      r.peso=parseFloat(r.peso)||0;
+      r.quant=parseBR(r.quant);
+      r.peso=parseBR(r.peso);
       r.idade=r.idade?parseInt(r.idade):calcIdade(r.dt_dig);
       r.cod=String(r.cod||'').trim();
       r.pedido=String(r.pedido||'').trim();
@@ -1220,30 +1223,23 @@ async function processarPlanilhas(){
       return r;
     }).filter(r=>r.cod&&r.pedido);
 
-    // Diagnóstico: mostrar colunas encontradas no LOTE
     const colsLote=rawL.length?Object.keys(rawL[0]):[];
     console.log('[LOTE] Colunas encontradas:', colsLote);
 
-    // Mapear LOTE
+    // Mapear LOTE — filtrar C/IMPUREZA (grãos brutos, não sacas)
     const novoLote=rawL.map(row=>{
       const r=mapRow(row,MAPA_LOTE);
-      r.estoque=parseFloat(r.estoque)||0;
-      r.ent_futura=parseFloat(r.ent_futura)||0;
-      r.saldo=parseFloat(r.saldo)||0;
-      r.transf=parseFloat(r.transf)||0;
-      r.saldo_transf=parseFloat(r.saldo_transf)||0;
+      r.estoque=parseBR(r.estoque);
+      r.transf=parseBR(r.transf);
+      r.saldo_transf=parseBR(r.saldo_transf);
+      r.saldo=r.saldo_transf; // LOTE não tem coluna saldo separada
+      r.ent_futura=0;
       r.cod=String(r.cod||'').trim();
+      r.descricao=String(r.descricao||'').trim();
       return r;
-    }).filter(r=>r.filial||r.cod);
-
-    // Sanidade: estoque médio por linha > 50000 sc é suspeito (provavelmente R$)
-    const estMedia=novoLote.reduce((s,r)=>s+r.estoque,0)/(novoLote.length||1);
-    if(estMedia>50000){
-      const colsStr=colsLote.join(' | ');
-      st.style.color='var(--vm)';
-      st.textContent='❌ LOTE: valor de estoque suspeito (média='+Math.round(estMedia).toLocaleString('pt-BR')+' sc/linha — provável mapeamento errado de coluna). Colunas no arquivo: '+colsStr;
-      return;
-    }
+    }).filter(r=>(r.filial||r.cod)&&r.descricao&&
+      r.descricao.toUpperCase().includes('SEM.AGR.')&&
+      !r.descricao.toUpperCase().includes('IMPUREZA'));
 
     if(!novoResumo.length){
       const cols=Object.keys(rawR[0]).join(', ');
