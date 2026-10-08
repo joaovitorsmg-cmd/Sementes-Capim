@@ -1220,6 +1220,10 @@ async function processarPlanilhas(){
       return r;
     }).filter(r=>r.cod&&r.pedido);
 
+    // Diagnóstico: mostrar colunas encontradas no LOTE
+    const colsLote=rawL.length?Object.keys(rawL[0]):[];
+    console.log('[LOTE] Colunas encontradas:', colsLote);
+
     // Mapear LOTE
     const novoLote=rawL.map(row=>{
       const r=mapRow(row,MAPA_LOTE);
@@ -1231,6 +1235,15 @@ async function processarPlanilhas(){
       r.cod=String(r.cod||'').trim();
       return r;
     }).filter(r=>r.filial||r.cod);
+
+    // Sanidade: estoque médio por linha > 50000 sc é suspeito (provavelmente R$)
+    const estMedia=novoLote.reduce((s,r)=>s+r.estoque,0)/(novoLote.length||1);
+    if(estMedia>50000){
+      const colsStr=colsLote.join(' | ');
+      st.style.color='var(--vm)';
+      st.textContent='❌ LOTE: valor de estoque suspeito (média='+Math.round(estMedia).toLocaleString('pt-BR')+' sc/linha — provável mapeamento errado de coluna). Colunas no arquivo: '+colsStr;
+      return;
+    }
 
     if(!novoResumo.length){
       const cols=Object.keys(rawR[0]).join(', ');
