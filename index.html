@@ -67,6 +67,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--tx
 .pill.p-dig-pr.on{background:var(--vm);color:#fff}
 /* Checkboxes de mês */
 .mes-checks{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#wrap-antigos{display:none;gap:6px;flex-wrap:wrap;align-items:center}
+#wrap-antigos.show{display:inline-flex}
 .mes-chk{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:12px;font-size:10px;font-weight:700;border:1.5px solid #B0BEC5;cursor:pointer;background:#ECEFF1;color:#546E7A;user-select:none;transition:all .15s}
 .mes-chk input[type=checkbox]{display:none}
 .mes-chk.on{background:var(--az2);color:#fff;border-color:var(--az2)}
@@ -507,12 +509,19 @@ function buildMesChecks(){
     const [mb,yb]=b.split("/").map(Number);
     return yb!==ya?yb-ya:mb-ma;
   });
+  const MAX_VISIVEIS=6;
   const recentes=todos.slice(0,4);
   mesesAtivos=new Set(recentes);
+  mostrarAntigos=false;
   const NOMES={"01":"Jan","02":"Fev","03":"Mar","04":"Abr","05":"Mai","06":"Jun","07":"Jul","08":"Ago","09":"Set","10":"Out","11":"Nov","12":"Dez"};
   const mc=document.getElementById("mes-checks");
   mc.innerHTML="";
-  todos.forEach(m=>{
+
+  // Mostrar só os primeiros MAX_VISIVEIS meses
+  const visiveis=todos.slice(0,MAX_VISIVEIS);
+  const antigos=todos.slice(MAX_VISIVEIS);
+
+  visiveis.forEach(m=>{
     const [mm,yy]=m.split("/");
     const ativo=mesesAtivos.has(m);
     const sp=document.createElement("span");
@@ -522,14 +531,35 @@ function buildMesChecks(){
     sp.textContent=(ativo?"✓ ":"")+NOMES[mm]+"/"+yy.slice(2);
     mc.appendChild(sp);
   });
-  const spAnt=document.createElement("span");
-  spAnt.className="mes-chk mais-antigo";
-  spAnt.dataset.mes="ANTIGOS";
-  spAnt.onclick=function(){toggleMes(this);};
-  spAnt.textContent="🔒 Mais antigos";
-  mc.appendChild(spAnt);
+
+  if(antigos.length){
+    // Botão expandir meses antigos
+    const spAnt=document.createElement("span");
+    spAnt.className="mes-chk mais-antigo";
+    spAnt.dataset.mes="ANTIGOS";
+    spAnt.id="btn-mais-antigos";
+    spAnt.onclick=function(){toggleMes(this);};
+    spAnt.textContent="🔒 Mais antigos ("+antigos.length+"m)";
+    mc.appendChild(spAnt);
+
+    // Container oculto com meses antigos
+    const wrap=document.createElement("span");
+    wrap.id="wrap-antigos";
+    wrap.style.cssText="display:none;";
+    antigos.forEach(m=>{
+      const [mm,yy]=m.split("/");
+      const sp=document.createElement("span");
+      sp.className="mes-chk";
+      sp.dataset.mes=m;
+      sp.onclick=function(){toggleMes(this);};
+      sp.textContent=NOMES[mm]+"/"+yy.slice(2);
+      wrap.appendChild(sp);
+    });
+    mc.appendChild(wrap);
+  }
+
   const aviso=document.getElementById("aviso-antigos");
-  if(aviso)aviso.style.display="";
+  if(aviso)aviso.style.display="none";
 }
 
 inicializar();
@@ -540,8 +570,26 @@ function toggleMes(el){
   if(mes==='ANTIGOS'){
     mostrarAntigos = !mostrarAntigos;
     el.classList.toggle('on', mostrarAntigos);
-    el.textContent = mostrarAntigos ? '✓ Mais antigos' : '🔒 Mais antigos';
-    document.getElementById('aviso-antigos').style.display = mostrarAntigos ? 'none' : '';
+    const n=el.textContent.replace('✓ ','').replace('🔒 ','');
+    el.textContent = (mostrarAntigos?'✓ ':'🔒 ')+n;
+    const wrap=document.getElementById('wrap-antigos');
+    if(wrap){
+      wrap.style.display=mostrarAntigos?'inline-flex':'none';
+      // Marcar/desmarcar todos os meses antigos
+      wrap.querySelectorAll('.mes-chk').forEach(sp=>{
+        if(mostrarAntigos){
+          mesesAtivos.add(sp.dataset.mes);
+          sp.classList.add('on');
+          if(!sp.textContent.startsWith('✓')) sp.textContent='✓ '+sp.textContent;
+        } else {
+          mesesAtivos.delete(sp.dataset.mes);
+          sp.classList.remove('on');
+          sp.textContent=sp.textContent.replace('✓ ','');
+        }
+      });
+    }
+    const aviso=document.getElementById('aviso-antigos');
+    if(aviso) aviso.style.display=mostrarAntigos?'none':'';
   } else {
     if(mesesAtivos.has(mes)){
       mesesAtivos.delete(mes);
@@ -1021,8 +1069,20 @@ function mapRow(row, mapa){
   const keys=Object.keys(row);
   for(const [campo, padroes] of Object.entries(mapa)){
     let val=null;
+    // 1) exact match
     for(const p of padroes){
-      const k=keys.find(k=>norm(k)===norm(p)||norm(k).includes(norm(p)));
+      const k=keys.find(k=>norm(k)===norm(p));
+      if(k!==undefined){val=row[k];break;}
+    }
+    // 2) starts-with match
+    if(val===null) for(const p of padroes){
+      const k=keys.find(k=>norm(k).startsWith(norm(p)+' ')||norm(k).startsWith(norm(p)+'('));
+      if(k!==undefined){val=row[k];break;}
+    }
+    // 3) includes match (last resort, shorter patterns only to avoid false positives)
+    if(val===null) for(const p of padroes){
+      if(norm(p).length<5) continue; // skip short patterns
+      const k=keys.find(k=>norm(k).includes(norm(p))&&!norm(k).includes('valor')&&!norm(k).includes('preco')&&!norm(k).includes('r$'));
       if(k!==undefined){val=row[k];break;}
     }
     out[campo]=val;
@@ -1060,11 +1120,25 @@ const MAPA_LOTE={
   saldo_transf:['saldo c/ transf','saldo transf','saldo_transf','saldo com transferencia'],
 };
 
+function normSituacao(raw){
+  if(!raw) return 'Digitado';
+  const s=String(raw).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(s==='ap. reservado'||s==='aprovado - ok/reservado'||s==='ap. res.'||s==='aprovado ok/reservado') return 'Ap. Reservado';
+  if(s.includes('reservado parcial')||s.includes('res. parcial')||s.includes('reserv parcial')) return 'Ap. Reservado Parcial';
+  if((s.includes('sem estoque'))&&(s.startsWith('ap')||s.includes('aprovado'))) return 'Ap. Sem Estoque';
+  if((s.includes('reservado')||s.includes('reserv'))&&(s.startsWith('ap')||s.includes('aprovado'))) return 'Ap. Reservado';
+  if(s.startsWith('ap.')||s.startsWith('aprovado')||s.includes('aprovado')) return 'Ap. Reservado';
+  if(s.includes('com problema')||s.includes('c/ problema')||s.includes('com problemas')) return 'Dig. Com Problemas';
+  if(s.includes('sem estoque')&&(s.startsWith('dig')||s.includes('digitado'))) return 'Dig. Sem Estoque';
+  if(s.includes('nao analisado')||s.includes('não analisado')) return 'Digitado';
+  if(s.startsWith('dig')||s.includes('digitado')) return 'Digitado';
+  return raw; // manter original se não mapeado
+}
+
 function derivarStatusGrupo(situacao){
   if(!situacao) return 'Digitado';
-  const s=String(situacao).toLowerCase();
-  if(s.includes('ap.') || s.startsWith('ap ') || s==='aprovado') return 'Aprovado';
-  return 'Digitado';
+  const s=normSituacao(situacao);
+  return s.startsWith('Ap.') ? 'Aprovado' : 'Digitado';
 }
 
 function calcIdade(dtDig){
@@ -1141,6 +1215,7 @@ async function processarPlanilhas(){
       r.idade=r.idade?parseInt(r.idade):calcIdade(r.dt_dig);
       r.cod=String(r.cod||'').trim();
       r.pedido=String(r.pedido||'').trim();
+      r.situacao=normSituacao(r.situacao);
       r.status_grupo=derivarStatusGrupo(r.situacao);
       return r;
     }).filter(r=>r.cod&&r.pedido);
