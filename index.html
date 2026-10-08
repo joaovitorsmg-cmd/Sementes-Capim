@@ -1113,6 +1113,8 @@ const MAPA_LOTE={
   cod:         ['Código','Codigo','codigo','cod'],
   descricao:   ['Descrição','Descricao','descricao','produto'],
   estoque:     ['Qtde. Estoque','Qtde.Estoque','estoque','qtde estoque'],
+  ent_futura:  ['Qtde. Ent. Futura','Ent. Futura','ent futura','entrada futura','ent_futura'],
+  saldo:       ['Saldo','saldo'],
   transf:      ['Qtde. Transf.','Qtde.Transf.','transf','qtde transf'],
   saldo_transf:['(Saldo + Transf.)','saldo + transf','saldo transf','saldo_transf'],
 };
@@ -1232,8 +1234,8 @@ async function processarPlanilhas(){
       r.estoque=parseBR(r.estoque);
       r.transf=parseBR(r.transf);
       r.saldo_transf=parseBR(r.saldo_transf);
-      r.saldo=r.saldo_transf; // LOTE não tem coluna saldo separada
-      r.ent_futura=0;
+      r.ent_futura=parseBR(r.ent_futura);
+      r.saldo=parseBR(r.saldo)||r.saldo_transf; // usa Saldo se disponível, senão Saldo+Transf.
       r.cod=String(r.cod||'').trim();
       r.descricao=String(r.descricao||'').trim();
       return r;
