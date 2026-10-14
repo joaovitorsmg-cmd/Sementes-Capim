@@ -313,7 +313,7 @@ table.main td{padding:6px 9px;vertical-align:middle}
 <div class="tabs-est">
   <div class="tab-e on" id="te-cart" onclick="setTabEst('cart')">📋 Carteira de Pedidos</div>
   <div class="tab-e" id="te-est" onclick="setTabEst('est')">📦 Estoque por Filial</div>
-  <div class="tab-e" id="te-prod" onclick="setTabEst('prod')" style="background:#1B3A1B;color:#A5D6A7;border-color:#2E7D32">🏭 O que Produzir <span style="background:rgba(165,214,167,.2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">13</span></div>
+  <div class="tab-e" id="te-prod" onclick="setTabEst('prod')" style="background:#1B3A1B;color:#A5D6A7;border-color:#2E7D32">🏭 O que Produzir <span id="badge-prod" style="background:rgba(165,214,167,.2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">13</span></div>
 </div>
 
 <!-- PAINEL CARTEIRA -->
@@ -378,8 +378,8 @@ table.ptable td{padding:6px 9px;vertical-align:middle}
 .pd1{background:#C62828}.pd2{background:#E65100}.pd3{background:#F9A825}.pd4{background:#1B5E20}
 </style>
 <div class="prod-kpi-bar">
-  <div class="prod-kpi"><div class="prod-kpi-val blue">13</div><div class="prod-kpi-lbl">Itens p/ Produzir</div></div>
-  <div class="prod-kpi"><div class="prod-kpi-val orange">5.810</div><div class="prod-kpi-lbl">Sc Necessários</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-itens">13</div><div class="prod-kpi-lbl">Itens p/ Produzir</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val orange" id="kp-sc">5.810</div><div class="prod-kpi-lbl">Sc Necessários</div></div>
   <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-batidas">26</div><div class="prod-kpi-lbl">Batidas Totais</div></div>
   <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-dias">≈35d</div><div class="prod-kpi-lbl">Dias de Produção</div></div>
   <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-excedente">4.854</div><div class="prod-kpi-lbl">Sc Excedente (Folga)</div></div>
@@ -988,7 +988,12 @@ function renderProd(){
   // Atualizar KPIs de produção
   const totalDias = dados.reduce((s,r)=>s+r.dias_prod,0);
   const totalBat  = dados.reduce((s,r)=>s+r.batidas,0);
+  const totalSc   = dados.reduce((s,r)=>s+r.sc_produzidos,0);
   const excedente = dados.reduce((s,r)=>s+(r.saldo_final>0?r.saldo_final:0),0);
+  const nProd = dados.filter(r=>r.prod_nec>0).length;
+  document.getElementById('kp-itens').textContent    = nProd;
+  const badge=document.getElementById('badge-prod'); if(badge) badge.textContent=nProd;
+  document.getElementById('kp-sc').textContent       = totalSc.toLocaleString('pt-BR');
   document.getElementById('kp-dias').textContent     = '≈'+Math.round(totalDias)+'d';
   document.getElementById('kp-batidas').textContent  = totalBat;
   document.getElementById('kp-excedente').textContent= excedente.toLocaleString('pt-BR');
