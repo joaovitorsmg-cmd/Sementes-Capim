@@ -506,6 +506,7 @@ function reinicializar(){
   document.querySelector(".pill.p-all").classList.add("on");
   render();
   renderEstoque();
+  if(document.getElementById('panel-prod')?.classList.contains('on')) renderProd();
 }
 
 const NOMES_MES={"01":"Jan","02":"Fev","03":"Mar","04":"Abr","05":"Mai","06":"Jun","07":"Jul","08":"Ago","09":"Set","10":"Out","11":"Nov","12":"Dez"};
@@ -927,18 +928,33 @@ const CENARIOS = {
 
 function calcularCenario(cen){
   const {rev, nrev} = CENARIOS[cen];
-  return PROD.map(r=>{
-    const isRev = r.classificacao==='REVESTIDA';
-    const sc_dia = isRev ? rev : nrev;
-    const batidas = r.prod_nec>0 ? Math.ceil(r.prod_nec/r.sc_batida) : 0;
-    const sc_prod = batidas*r.sc_batida;
-    const total   = r.estoque + sc_prod;
-    const saldo   = total - r.cart_ap;
-    const pct     = r.cart_ap>0 ? Math.min((100*total/r.cart_ap),9999) : 0;
-    const dias    = sc_prod>0 && sc_dia>0 ? Math.round(10*sc_prod/sc_dia)/10 : 0;
-    return {...r, sc_dia, batidas, sc_produzidos:sc_prod, total_disp:total,
-            saldo_final:saldo, pct_total:pct, dias_prod:dias};
+
+  // Estoque dinâmico: soma todas as filiais por código
+  const estMap={};
+  LOTE.forEach(r=>{ const c=String(r.cod); estMap[c]=(estMap[c]||0)+(r.estoque||0); });
+
+  // Carteira aprovada dinâmica: soma quant de todos os status Aprovado por código
+  const cartMap={};
+  RESUMO.filter(r=>r.status_grupo==='Aprovado').forEach(r=>{
+    const c=String(r.cod); cartMap[c]=(cartMap[c]||0)+(r.quant||0);
   });
+
+  return PROD.map(r=>{
+    const cod=String(r.cod);
+    const estoque  = estMap[cod]!==undefined ? estMap[cod]  : r.estoque;
+    const cart_ap  = cartMap[cod]!==undefined ? cartMap[cod] : r.cart_ap;
+    const isRev    = r.classificacao==='REVESTIDA';
+    const sc_dia   = isRev ? rev : nrev;
+    const prod_nec = Math.max(0, cart_ap - estoque);
+    const batidas  = prod_nec>0 ? Math.ceil(prod_nec/r.sc_batida) : 0;
+    const sc_prod  = batidas*r.sc_batida;
+    const total    = estoque+sc_prod;
+    const saldo    = total-cart_ap;
+    const pct      = cart_ap>0 ? Math.min((100*total/cart_ap),9999) : 0;
+    const dias     = sc_prod>0&&sc_dia>0 ? Math.round(10*sc_prod/sc_dia)/10 : 0;
+    return {...r, estoque, cart_ap, prod_nec, sc_dia, batidas,
+            sc_produzidos:sc_prod, total_disp:total, saldo_final:saldo, pct_total:pct, dias_prod:dias};
+  }).filter(r=>r.cart_ap>0);
 }
 
 function setCenario(cen){
