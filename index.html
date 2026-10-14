@@ -386,7 +386,7 @@ table.ptable td{padding:6px 9px;vertical-align:middle}
 </div>
 <div class="ptable-wrap">
   <div class="ptable-info" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <span>13 produtos com produção aprovada necessária &nbsp;·&nbsp; <strong id="label-cenario">Revestidas: 250 Sc/dia · Não revestidas: 500 Sc/dia</strong></span>
+    <span><span id="label-nprod">—</span> produtos com produção aprovada necessária &nbsp;·&nbsp; <strong id="label-cenario">Revestidas: 250 Sc/dia · Não revestidas: 500 Sc/dia</strong></span>
     <span style="display:flex;align-items:center;gap:6px">
       <span style="font-size:10px;color:#546E7A;font-weight:600">Cenário:</span>
       <span id="btn-cen-a" onclick="setCenario('A')"
@@ -565,6 +565,7 @@ function toggleMesCheck(mes,checked,label){
   else { mesesAtivos.delete(mes); label.style.borderColor="#CFD8DC"; label.style.background="#F5F7FA"; label.style.color="#546E7A"; }
   atualizarBotaoMes();
   render();
+  if(document.getElementById('panel-prod')?.classList.contains('on')) renderProd();
 }
 
 function selTodosMeses(sel){
@@ -577,6 +578,7 @@ function selTodosMeses(sel){
   });
   atualizarBotaoMes();
   render();
+  if(document.getElementById('panel-prod')?.classList.contains('on')) renderProd();
 }
 
 function atualizarBotaoMes(){
@@ -934,11 +936,13 @@ function calcularCenario(cen){
   const estMap={};
   LOTE.forEach(r=>{ const c=String(r.cod); estMap[c]=(estMap[c]||0)+(r.estoque||0); });
 
-  // Carteira aprovada dinâmica: respeita filtro de situação ativo
+  // Carteira aprovada dinâmica: respeita filtro de situação e mês ativos
   const cartMap={};
   RESUMO.filter(r=>{
     if(r.status_grupo!=='Aprovado') return false;
-    if(sitAtiva.size>0) return sitAtiva.has(r.situacao);
+    if(sitAtiva.size>0 && !sitAtiva.has(r.situacao)) return false;
+    const mesAno=getMesAnoRow(r);
+    if(mesesAtivos.size>0 && !mesesAtivos.has(mesAno)) return false;
     return true;
   }).forEach(r=>{ const c=String(r.cod); cartMap[c]=(cartMap[c]||0)+(r.quant||0); });
 
@@ -996,6 +1000,7 @@ function renderProd(){
   const nProd = dados.filter(r=>r.prod_nec>0).length;
   document.getElementById('kp-itens').textContent    = nProd;
   const badge=document.getElementById('badge-prod'); if(badge) badge.textContent=nProd;
+  const lnp=document.getElementById('label-nprod'); if(lnp) lnp.textContent=dados.length;
   document.getElementById('kp-sc').textContent       = totalSc.toLocaleString('pt-BR');
   document.getElementById('kp-dias').textContent     = '≈'+Math.round(totalDias)+'d';
   document.getElementById('kp-batidas').textContent  = totalBat;
