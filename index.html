@@ -165,6 +165,7 @@ table.main td{padding:6px 9px;vertical-align:middle}
   <div class="hdr-logo">Agroquima <span>Painel de Carteira de Pedidos</span></div>
   <div class="hdr-right">
     <button class="upload-btn" onclick="document.getElementById('upload-area').classList.add('show')">⬆ Atualizar planilhas</button>
+    <button class="upload-btn" style="background:rgba(200,50,50,.25);border-color:rgba(255,120,120,.4)" onclick="limparDados()">🗑 Limpar Dados</button>
     <span class="hdr-ref" id="ref-date">Carregado em: —</span>
   </div>
 </div>
@@ -1025,6 +1026,9 @@ function renderProd(){
       if(d>0) diffDias=` <span style="font-size:9px;color:#1B5E20;font-weight:700">-${d}d</span>`;
     }
     const tr=document.createElement('tr');
+    tr.style.cursor='pointer';
+    tr.title='Clique para ver pedidos deste produto';
+    tr.addEventListener('click',()=>abrirDetalhesProd(r.cod,r.produto));
     tr.innerHTML=`
       <td style="text-align:center"><span class="pdot ${dotCls}"></span> <strong style="font-size:10px">${r.prioridade}</strong></td>
       <td style="font-weight:700;color:#0D47A1;font-size:10px">${r.cod}</td>
@@ -1274,6 +1278,89 @@ async function processarPlanilhas(){
     st.textContent='❌ Erro ao ler arquivos: '+err.message;
   }
 }
+
+// ── MODAL DETALHES PRODUTO ──
+function abrirDetalhesProd(cod, produto){
+  const f=getFilt();
+  const pedidos=RESUMO.filter(r=>{
+    if(String(r.cod)!==String(cod)) return false;
+    const mesAno=getMesAnoRow(r);
+    if(!mesesAtivos.has(mesAno)) return false;
+    if(f.tipo && r.tipo!==f.tipo) return false;
+    if(f.entrega && r.tipo_entrega!==f.entrega) return false;
+    if(f.filial && r.loja_ped!==f.filial) return false;
+    return true;
+  }).sort((a,b)=>String(a.situacao).localeCompare(String(b.situacao),'pt-BR'));
+
+  const totalSc =pedidos.reduce((s,r)=>s+(r.quant||0),0);
+  const totalKg =pedidos.reduce((s,r)=>s+(r.peso||0),0);
+  const totalAp =pedidos.filter(r=>r.status_grupo==='Aprovado').reduce((s,r)=>s+(r.quant||0),0);
+
+  document.getElementById('mprod-title').textContent=`${cod} — ${produto.substring(0,60)}`;
+  document.getElementById('mprod-sub').textContent=`${pedidos.length} pedido(s) · ${totalSc.toLocaleString('pt-BR')} sc · ${totalKg.toLocaleString('pt-BR')} kg · Aprovados: ${totalAp.toLocaleString('pt-BR')} sc`;
+
+  document.getElementById('mprod-body').innerHTML=pedidos.map(r=>`
+    <tr style="border-bottom:1px solid #F5F5F5" onmouseover="this.style.background='#F8F9FF'" onmouseout="this.style.background=''">
+      <td style="padding:5px 8px;font-family:monospace;font-size:10px">${r.pedido||'—'}</td>
+      <td style="padding:5px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.cliente||'').replace(/"/g,'')}">${(r.cliente||'—').substring(0,28)}</td>
+      <td style="padding:5px 8px;color:#546E7A;white-space:nowrap">${r.dt_dig||'—'}</td>
+      <td style="padding:5px 8px">${badgeSit(r.situacao)}</td>
+      <td style="padding:5px 8px;text-align:right;font-weight:600">${(r.quant||0).toLocaleString('pt-BR')}</td>
+      <td style="padding:5px 8px;text-align:right">${(r.peso||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
+      <td style="padding:5px 8px;font-size:10px;color:#546E7A">${r.loja_ped||'—'}</td>
+      <td style="padding:5px 8px;font-size:10px">${r.tipo==='Venda'?'<span style="color:var(--az);font-weight:600">Venda</span>':'<span style="color:var(--ci)">Transf.</span>'}</td>
+    </tr>`).join('');
+
+  document.getElementById('mprod-foot').innerHTML=`
+    <tr style="background:#E8F5E9;font-weight:700;border-top:2px solid var(--vd)">
+      <td colspan="4" style="padding:8px;color:var(--vd2);background:var(--az2);color:#90CAF9">TOTAL — ${pedidos.length} pedido(s)</td>
+      <td style="padding:8px;text-align:right;background:var(--az2);color:#fff;font-size:13px">${totalSc.toLocaleString('pt-BR')} sc</td>
+      <td style="padding:8px;text-align:right;background:var(--az2);color:#A5D6A7;font-size:13px">${totalKg.toLocaleString('pt-BR',{maximumFractionDigits:1})} kg</td>
+      <td colspan="2" style="background:var(--az2);color:#90CAF9;font-size:10px;padding:8px">Aprovados: ${totalAp.toLocaleString('pt-BR')} sc</td>
+    </tr>`;
+
+  document.getElementById('modal-prod').style.display='flex';
+}
+
+// ── LIMPAR DADOS ──
+function limparDados(){
+  RESUMO=[];
+  LOTE=[];
+  limpar();
+  document.getElementById('ref-date').textContent='Carregado em: —';
+  document.getElementById('mes-checks').innerHTML='';
+  atualizarBotaoMes();
+  if(document.getElementById('panel-prod')?.classList.contains('on')) renderProd();
+}
 </script>
+
+<!-- Modal Detalhes Produto -->
+<div id="modal-prod" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:10px;width:min(95vw,900px);max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.35)">
+    <div style="background:var(--az2);color:#fff;padding:12px 16px;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div>
+        <div id="mprod-title" style="font-weight:700;font-size:13px"></div>
+        <div id="mprod-sub" style="font-size:10px;color:#90CAF9;margin-top:3px"></div>
+      </div>
+      <button onclick="document.getElementById('modal-prod').style.display='none'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:15px;flex-shrink:0">✕</button>
+    </div>
+    <div style="overflow:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#F5F7FA;position:sticky;top:0;z-index:1">
+          <th style="padding:7px 8px;text-align:left;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0;white-space:nowrap">Pedido</th>
+          <th style="padding:7px 8px;text-align:left;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0">Cliente</th>
+          <th style="padding:7px 8px;text-align:left;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0;white-space:nowrap">Data Dig.</th>
+          <th style="padding:7px 8px;text-align:left;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0">Situação</th>
+          <th style="padding:7px 8px;text-align:right;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0;white-space:nowrap">Quant (sc)</th>
+          <th style="padding:7px 8px;text-align:right;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0;white-space:nowrap">Peso (kg)</th>
+          <th style="padding:7px 8px;text-align:left;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0">Filial</th>
+          <th style="padding:7px 8px;text-align:left;font-weight:600;color:#546E7A;border-bottom:2px solid #E0E0E0">Tipo</th>
+        </tr></thead>
+        <tbody id="mprod-body"></tbody>
+        <tfoot id="mprod-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
 </body>
 </html>
