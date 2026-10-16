@@ -329,6 +329,7 @@ table.main td{padding:6px 9px;vertical-align:middle}
           <th onclick="sortBy('cod')">Cód.</th>
           <th onclick="sortBy('produto')">Produto</th>
           <th onclick="sortBy('quant')" class="num">Sc</th>
+          <th onclick="sortBy('peso')" class="num">Peso (kg)</th>
           <th onclick="sortBy('pedido')">Pedido</th>
           <th onclick="sortBy('tipo')">Tipo</th>
           <th onclick="sortBy('situacao')">Situação</th>
@@ -384,6 +385,7 @@ table.ptable td{padding:6px 9px;vertical-align:middle}
   <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-batidas">26</div><div class="prod-kpi-lbl">Batidas Totais</div></div>
   <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-dias">≈35d</div><div class="prod-kpi-lbl">Dias de Produção</div></div>
   <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-excedente">4.854</div><div class="prod-kpi-lbl">Sc Excedente (Folga)</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val" style="color:#CE93D8" id="kp-peso">—</div><div class="prod-kpi-lbl">Peso Cart. (kg)</div></div>
 </div>
 <div class="ptable-wrap">
   <div class="ptable-info" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -413,6 +415,7 @@ table.ptable td{padding:6px 9px;vertical-align:middle}
       <th onclick="psort('sc_dia')" style="text-align:right">Sc/Dia</th>
       <th onclick="psort('dias_prod')" style="text-align:right">Dias Prod.</th>
       <th onclick="psort('saldo_final')" style="text-align:right">Saldo Final</th>
+      <th onclick="psort('peso_ap')" style="text-align:right">Peso (kg)</th>
       <th>Cobertura Carteira</th>
     </tr></thead>
     <tbody id="ptbody"></tbody>
@@ -704,6 +707,7 @@ function render(){
         <td class="t-az">${r.cod}</td>
         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.produto}">${r.produto.replace('SEM.AGR.','')}</td>
         <td class="num">${r.quant.toLocaleString('pt-BR')}</td>
+        <td class="num" style="color:#546E7A">${(r.peso||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td style="font-size:10px">${r.pedido}</td>
         <td>${r.tipo==='Venda'?'<span style="color:var(--az);font-weight:600">Venda</span>':'<span style="color:var(--ci)">Transf.</span>'}</td>
         <td>${badgeSit(r.situacao)}</td>
@@ -938,14 +942,22 @@ function calcularCenario(cen){
   LOTE.forEach(r=>{ const c=String(r.cod); estMap[c]=(estMap[c]||0)+(r.estoque||0); });
 
   // Carteira aprovada dinâmica: respeita filtro de situação e mês ativos
-  const cartMap={};
+  const cartMap={}, pesoMap={};
+  const f=getFilt();
   RESUMO.filter(r=>{
     if(r.status_grupo!=='Aprovado') return false;
     if(sitAtiva.size>0 && !sitAtiva.has(r.situacao)) return false;
     const mesAno=getMesAnoRow(r);
     if(mesesAtivos.size>0 && !mesesAtivos.has(mesAno)) return false;
+    if(f.tipo && r.tipo!==f.tipo) return false;
+    if(f.entrega && r.tipo_entrega!==f.entrega) return false;
+    if(f.filial && r.loja_ped!==f.filial) return false;
     return true;
-  }).forEach(r=>{ const c=String(r.cod); cartMap[c]=(cartMap[c]||0)+(r.quant||0); });
+  }).forEach(r=>{
+    const c=String(r.cod);
+    cartMap[c]=(cartMap[c]||0)+(r.quant||0);
+    pesoMap[c]=(pesoMap[c]||0)+(r.peso||0);
+  });
 
   return PROD.map(r=>{
     const cod=String(r.cod);
@@ -960,8 +972,9 @@ function calcularCenario(cen){
     const saldo    = total-cart_ap;
     const pct      = cart_ap>0 ? Math.min((100*total/cart_ap),9999) : 0;
     const dias     = sc_prod>0&&sc_dia>0 ? Math.round(10*sc_prod/sc_dia)/10 : 0;
+    const peso_ap=pesoMap[cod]||0;
     return {...r, estoque, cart_ap, prod_nec, sc_dia, batidas,
-            sc_produzidos:sc_prod, total_disp:total, saldo_final:saldo, pct_total:pct, dias_prod:dias};
+            sc_produzidos:sc_prod, total_disp:total, saldo_final:saldo, pct_total:pct, dias_prod:dias, peso_ap};
   }).filter(r=>r.cart_ap>0);
 }
 
@@ -1006,6 +1019,8 @@ function renderProd(){
   document.getElementById('kp-dias').textContent     = '≈'+Math.round(totalDias)+'d';
   document.getElementById('kp-batidas').textContent  = totalBat;
   document.getElementById('kp-excedente').textContent= excedente.toLocaleString('pt-BR');
+  const totalPeso=dados.reduce((s,r)=>s+(r.peso_ap||0),0);
+  document.getElementById('kp-peso').textContent=totalPeso.toLocaleString('pt-BR',{maximumFractionDigits:1});
 
   // Mapa do cenário A para mostrar diff no cenário B
   const dadosA = cenarioAtivo==='B' ? calcularCenario('A') : null;
@@ -1043,6 +1058,7 @@ function renderProd(){
       <td style="text-align:right;font-weight:700;color:${cenarioAtivo==='B'?'#0D47A1':'inherit'}">${r.sc_dia}</td>
       <td style="text-align:right"><span class="dias-badge ${diasCls}">${r.dias_prod}d</span>${diffDias}</td>
       <td style="text-align:right;color:${r.saldo_final>=0?'#1B5E20':'#C62828'};font-weight:600">${r.saldo_final>=0?'+':''}${r.saldo_final.toLocaleString('pt-BR')}</td>
+      <td style="text-align:right;color:#7B1FA2;font-weight:600">${(r.peso_ap||0).toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
       <td>
         <div class="pbar-wrap">
           <div class="pbar pbar-est" style="width:${Math.max(pw_est,2)}px" title="Est: ${r.estoque}"></div>
