@@ -314,7 +314,7 @@ table.main td{padding:6px 9px;vertical-align:middle}
 <div class="tabs-est">
   <div class="tab-e on" id="te-cart" onclick="setTabEst('cart')">📋 Carteira de Pedidos</div>
   <div class="tab-e" id="te-est" onclick="setTabEst('est')">📦 Estoque por Filial</div>
-  <div class="tab-e" id="te-prod" onclick="setTabEst('prod')" style="background:#1B3A1B;color:#A5D6A7;border-color:#2E7D32">🏭 O que Produzir <span id="badge-prod" style="background:rgba(165,214,167,.2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">13</span></div>
+  <div class="tab-e" id="te-prod" onclick="setTabEst('prod')" style="background:#1B3A1B;color:#A5D6A7;border-color:#2E7D32">🏭 O que Produzir <span id="badge-prod" style="background:rgba(165,214,167,.2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:4px">—</span></div>
 </div>
 
 <!-- PAINEL CARTEIRA -->
@@ -380,11 +380,11 @@ table.ptable td{padding:6px 9px;vertical-align:middle}
 .pd1{background:#C62828}.pd2{background:#E65100}.pd3{background:#F9A825}.pd4{background:#1B5E20}
 </style>
 <div class="prod-kpi-bar">
-  <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-itens">13</div><div class="prod-kpi-lbl">Itens p/ Produzir</div></div>
-  <div class="prod-kpi"><div class="prod-kpi-val orange" id="kp-sc">5.810</div><div class="prod-kpi-lbl">Sc Necessários</div></div>
-  <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-batidas">26</div><div class="prod-kpi-lbl">Batidas Totais</div></div>
-  <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-dias">≈35d</div><div class="prod-kpi-lbl">Dias de Produção</div></div>
-  <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-excedente">4.854</div><div class="prod-kpi-lbl">Sc Excedente (Folga)</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-itens">—</div><div class="prod-kpi-lbl">Itens p/ Produzir</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val orange" id="kp-sc">—</div><div class="prod-kpi-lbl">Sc Necessários</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-batidas">—</div><div class="prod-kpi-lbl">Batidas Totais</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val blue" id="kp-dias">—</div><div class="prod-kpi-lbl">Dias de Produção</div></div>
+  <div class="prod-kpi"><div class="prod-kpi-val green" id="kp-excedente">—</div><div class="prod-kpi-lbl">Sc Excedente (Folga)</div></div>
   <div class="prod-kpi"><div class="prod-kpi-val" style="color:#CE93D8" id="kp-peso">—</div><div class="prod-kpi-lbl">Peso Cart. (kg)</div></div>
 </div>
 <div class="ptable-wrap">
@@ -398,6 +398,20 @@ table.ptable td{padding:6px 9px;vertical-align:middle}
         style="padding:4px 12px;border-radius:12px;font-size:10px;font-weight:700;cursor:pointer;border:1.5px solid #B0BEC5;background:#ECEFF1;color:#546E7A">B — Ampliado</span>
       <span id="diff-badge" style="font-size:10px;color:#0D47A1;font-weight:700"></span>
     </span>
+  </div>
+  <!-- Sumário por grupo -->
+  <div id="prod-grupos" style="display:none;padding:8px 14px 0;gap:8px;display:flex;flex-wrap:wrap">
+    <table style="border-collapse:collapse;font-size:11px;width:100%;max-width:720px">
+      <thead><tr style="background:#E8F5E9">
+        <th style="padding:5px 10px;text-align:left;border-bottom:2px solid #A5D6A7;color:#1B5E20">Grupo</th>
+        <th style="padding:5px 10px;text-align:right;border-bottom:2px solid #A5D6A7;color:#1B5E20">Itens</th>
+        <th style="padding:5px 10px;text-align:right;border-bottom:2px solid #A5D6A7;color:#1B5E20">Cart. Aprovada (sc)</th>
+        <th style="padding:5px 10px;text-align:right;border-bottom:2px solid #A5D6A7;color:#1B5E20">Prod. Necessária (sc)</th>
+        <th style="padding:5px 10px;text-align:right;border-bottom:2px solid #A5D6A7;color:#1B5E20">Peso (kg)</th>
+        <th style="padding:5px 10px;text-align:right;border-bottom:2px solid #A5D6A7;color:#1B5E20">Dias Prod.</th>
+      </tr></thead>
+      <tbody id="grupo-body"></tbody>
+    </table>
   </div>
   <div style="overflow-x:auto">
   <table class="ptable" id="ptable">
@@ -935,6 +949,7 @@ const CENARIOS = {
 };
 
 function calcularCenario(cen){
+  if(!RESUMO.length && !LOTE.length) return [];
   const {rev, nrev} = CENARIOS[cen];
 
   // Estoque dinâmico: soma todas as filiais por código
@@ -961,8 +976,8 @@ function calcularCenario(cen){
 
   return PROD.map(r=>{
     const cod=String(r.cod);
-    const estoque  = estMap[cod]!==undefined ? estMap[cod]  : r.estoque;
-    const cart_ap  = cartMap[cod]!==undefined ? cartMap[cod] : r.cart_ap;
+    const estoque  = LOTE.length>0   ? (estMap[cod]!==undefined  ? estMap[cod]  : 0) : r.estoque;
+    const cart_ap  = RESUMO.length>0 ? (cartMap[cod]!==undefined ? cartMap[cod] : 0) : r.cart_ap;
     const isRev    = r.classificacao==='REVESTIDA';
     const sc_dia   = isRev ? rev : nrev;
     const prod_nec = Math.max(0, cart_ap - estoque);
@@ -1021,6 +1036,42 @@ function renderProd(){
   document.getElementById('kp-excedente').textContent= excedente.toLocaleString('pt-BR');
   const totalPeso=dados.reduce((s,r)=>s+(r.peso_ap||0),0);
   document.getElementById('kp-peso').textContent=totalPeso.toLocaleString('pt-BR',{maximumFractionDigits:1});
+
+  // Sumário por grupo
+  const grupos={REV:{label:'🔵 Revestidas',rows:[]}, OUT:{label:'🟢 Não Revestidas',rows:[]}};
+  dados.forEach(r=>{ (r.classificacao==='REVESTIDA'?grupos.REV:grupos.OUT).rows.push(r); });
+  const prodGrupos=document.getElementById('prod-grupos');
+  if(prodGrupos) prodGrupos.style.display=dados.length?'block':'none';
+  const grupoBody=document.getElementById('grupo-body');
+  if(grupoBody){
+    const fmtSc=n=>n.toLocaleString('pt-BR');
+    const fmtKg=n=>n.toLocaleString('pt-BR',{maximumFractionDigits:1});
+    let rows='';
+    let totCart=0,totProd=0,totPeso=0,totDias=0,totItens=0;
+    for(const g of Object.values(grupos)){
+      const nI=g.rows.length, cart=g.rows.reduce((s,r)=>s+r.cart_ap,0), prod=g.rows.reduce((s,r)=>s+r.prod_nec,0);
+      const kg=g.rows.reduce((s,r)=>s+(r.peso_ap||0),0), dias=g.rows.reduce((s,r)=>s+r.dias_prod,0);
+      totCart+=cart; totProd+=prod; totPeso+=kg; totDias+=dias; totItens+=nI;
+      if(!nI) continue;
+      rows+=`<tr style="border-bottom:1px solid #E8F5E9">
+        <td style="padding:5px 10px;font-weight:700">${g.label}</td>
+        <td style="padding:5px 10px;text-align:right">${nI}</td>
+        <td style="padding:5px 10px;text-align:right;color:#002B5B;font-weight:600">${fmtSc(cart)}</td>
+        <td style="padding:5px 10px;text-align:right;color:#C62828;font-weight:700">${fmtSc(prod)}</td>
+        <td style="padding:5px 10px;text-align:right;color:#6A1B9A">${fmtKg(kg)}</td>
+        <td style="padding:5px 10px;text-align:right;color:#546E7A">${Math.round(10*dias)/10}d</td>
+      </tr>`;
+    }
+    rows+=`<tr style="background:#E3F2FD;font-weight:700;border-top:2px solid var(--az2)">
+      <td style="padding:6px 10px;color:var(--az2)">TOTAL</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--az2)">${totItens}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--az2)">${fmtSc(totCart)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#B71C1C">${fmtSc(totProd)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#6A1B9A">${fmtKg(totPeso)}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--az2)">${Math.round(10*totDias)/10}d</td>
+    </tr>`;
+    grupoBody.innerHTML=rows;
+  }
 
   // Mapa do cenário A para mostrar diff no cenário B
   const dadosA = cenarioAtivo==='B' ? calcularCenario('A') : null;
@@ -1346,7 +1397,7 @@ function limparDados(){
   document.getElementById('ref-date').textContent='Carregado em: —';
   document.getElementById('mes-checks').innerHTML='';
   atualizarBotaoMes();
-  if(document.getElementById('panel-prod')?.classList.contains('on')) renderProd();
+  renderProd(); // sempre zerar aba Produzir independente de qual tab está ativa
 }
 </script>
 
