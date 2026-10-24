@@ -976,8 +976,8 @@ function calcularCenario(cen){
 
   return PROD.map(r=>{
     const cod=String(r.cod);
-    const estoque  = estMap[cod]!==undefined ? estMap[cod]  : r.estoque;
-    const cart_ap  = cartMap[cod]!==undefined ? cartMap[cod] : r.cart_ap;
+    const estoque  = LOTE.length>0   ? (estMap[cod]!==undefined  ? estMap[cod]  : 0) : r.estoque;
+    const cart_ap  = RESUMO.length>0 ? (cartMap[cod]!==undefined ? cartMap[cod] : 0) : r.cart_ap;
     const isRev    = r.classificacao==='REVESTIDA';
     const sc_dia   = isRev ? rev : nrev;
     const prod_nec = Math.max(0, cart_ap - estoque);
